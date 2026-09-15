@@ -1,0 +1,10 @@
+{
+  "name": "TaskCampus",
+  "short_name": "TaskCampus",
+  "description": "貼るだけ登録の学生向けタスク管理アプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#4F46E5",
+  "icons": []
+}
