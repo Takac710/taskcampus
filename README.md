@@ -36,8 +36,11 @@ frontend/  Next.js App Router + Tailwind（5画面のPWA）
    - Google Cloud Console で OAuth クライアントID を作成し、承認済みリダイレクトURIに `https://<project-ref>.supabase.co/auth/v1/callback` を設定
    - 発行されたクライアントID／シークレットをSupabaseのGoogleプロバイダ設定に貼る
 3. Authentication → URL Configuration → Redirect URLs に `http://localhost:3000` を追加（本番公開時は本番URLも追加）
-4. Project Settings → API から `Project URL` と `anon public` キーを取得 → フロントの環境変数へ
-5. Project Settings → API → JWT Settings から `Legacy JWT Secret` を取得 → バックエンドの環境変数へ（表示されていない場合は同画面でlegacy secretの発行/有効化が必要）
+4. Project Settings → API から `Project URL` と `anon public` キーを取得 → フロントの環境変数（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`）へ。同じ `Project URL` をバックエンドの `SUPABASE_URL` にも設定する
+5. バックエンドのJWT検証は `backend/app/deps.py` がトークンの`alg`ヘッダーを見て自動的に分岐する：
+   - 新しいプロジェクト（既定）はES256などの非対称鍵で署名される → `SUPABASE_URL`から`/auth/v1/.well-known/jwks.json`を取得して検証する。`SUPABASE_JWT_SECRET`は空でよい
+   - 古いプロジェクト（Legacy JWT Secretのまま運用しているもの）はHS256の共有シークレットで署名される → Project Settings → API → JWT Settings の `Legacy JWT Secret` を `SUPABASE_JWT_SECRET` に設定する
+   - どちらか迷う場合は、まず`SUPABASE_URL`だけ設定して試す（＝ES256側が既定で動く）。401が出続ける場合だけLegacy側を疑うとよい（**JWT SettingsのKey ID(kid)をJWT Secretと誤って貼ってしまうミスが起きやすいので注意**）
 6. （DBもSupabaseに載せる場合）Project Settings → Database → Connection string から接続文字列を取得 → バックエンドの `DATABASE_URL` へ
 
 ### 通知用VAPIDキーの準備（Web Pushに必須、外部アカウント不要）
