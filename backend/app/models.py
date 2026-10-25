@@ -45,6 +45,9 @@ class User(Base):
 
     courses: Mapped[list["Course"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     tasks: Mapped[list["Task"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    push_subscriptions: Mapped[list["PushSubscription"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Course(Base):
@@ -73,9 +76,26 @@ class Task(Base):
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.open)
     source: Mapped[TaskSource] = mapped_column(Enum(TaskSource), default=TaskSource.manual)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    notified_24h_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notified_morning_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="tasks")
     course: Mapped[Course | None] = relationship(back_populates="tasks")
+
+
+class PushSubscription(Base):
+    """One browser/device registration for Web Push (M6, F-05)."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(255))
+    auth: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    user: Mapped[User] = relationship(back_populates="push_subscriptions")
 
 
 class ExtractionLog(Base):

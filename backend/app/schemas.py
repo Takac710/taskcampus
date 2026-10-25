@@ -57,6 +57,16 @@ class TaskOut(TaskBase):
     created_at: datetime
 
 
+class PushSubscriptionKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str
+    keys: PushSubscriptionKeys
+
+
 class ExtractRequest(BaseModel):
     raw_text: str
 

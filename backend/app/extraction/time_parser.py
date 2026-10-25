@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 
 from ja_timex import TimexParser
 
+from ..time_utils import now_jst
+
 _parser = TimexParser()
 
 _WEEKDAY_JA_TO_INDEX = {"月": 0, "火": 1, "水": 2, "木": 3, "金": 4, "土": 5, "日": 6}
@@ -44,7 +46,7 @@ def _to_int(value: str | None) -> int | None:
 
 
 def resolve_due_datetime(text: str, now: datetime | None = None) -> TimeParseResult:
-    now = now or datetime.now()
+    now = now or now_jst()
     timexes = _parser.parse(text)
 
     week_offset: int | None = None

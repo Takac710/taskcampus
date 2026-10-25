@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..database import get_db
 from ..deps import get_current_user
+from ..time_utils import now_jst
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -87,7 +88,7 @@ def deadline_buckets(
     user: models.User = Depends(get_current_user),
 ):
     """Backs the home screen: overdue / today / this week / later, per F-04."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = now_jst()
     today_end = now.replace(hour=23, minute=59, second=59, microsecond=0)
     days_until_week_end = 6 - now.weekday()
     week_cutoff = (now + timedelta(days=days_until_week_end)).replace(hour=23, minute=59, second=59)

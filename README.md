@@ -16,12 +16,13 @@ frontend/  Next.js App Router + Tailwind（5画面のPWA）
 - 貼り付け登録＋確認画面（M5, F-03）：ja-timexで日時表現を解決し、RapidFuzzで科目を曖昧マッチ、キーワード辞書で種類分類
 - 5画面：ログイン／ホーム／貼り付け登録・確認／タスク編集／科目管理
 - **Google OAuth（Supabase Auth）（M1, F-01)**：フロントは`@supabase/supabase-js`でGoogle OAuthを実行し、取得したアクセストークンをAPIリクエストの`Authorization: Bearer`ヘッダーに付与。バックエンドは`backend/app/deps.py`でSupabaseのJWT（HS256, legacy JWT secret）を検証し、`sub`クレームでユーザーを解決・自動作成する。Supabaseプロジェクトを作成して環境変数を設定するまでは、どのAPIリクエストも401になる（ダミーログインへのフォールバックはない）
+- **リマインド通知（M6, F-05)**：Web Push。バックエンドは`backend/app/notifications.py`が締切24時間前／当日朝8時（JST）の2種類をチェックし、`pywebpush`で送信する。FastAPIプロセス内の`apscheduler`が既定15分間隔で巡回（本番でRenderのスリープに引っかかる場合はSupabase pg_cron + Edge Functionsへの移行が必要、未実装）。フロントは`public/sw.js`（Service Worker）がpush/notificationclickを処理し、ホーム画面の「通知を有効にする」ボタンから`pushManager.subscribe()`で購読してバックエンドに登録する
 
 ## まだ実装していない範囲（要件どおり後回し）
 
 - **Supabaseプロジェクトの作成自体**：コードは実装済みだが、実際のSupabaseプロジェクト作成・Google OAuthクライアントの設定・環境変数への値の投入はこのリポジトリの外で行う必要がある（下記セットアップ参照）
 - **本番DB（Supabase Postgres）への切り替え**：`DATABASE_URL`をSupabaseの接続文字列に差し替えれば動く想定（`psycopg2-binary`導入済みだが実DBでの動作は未検証）。ローカル開発は引き続きSQLiteがデフォルト
-- **リマインド通知（M6, F-05）**：Web Push / pg_cron 部分は未着手
+- **通知スケジューラのSupabase pg_cron化**：デプロイ時にRenderの無料枠がスリープする問題への対応（要件§6で言及されている対策）。現状はFastAPIプロセス内のapschedulerで代替
 - **デプロイ（Vercel / Render）**：未着手
 
 ## セットアップ
@@ -39,6 +40,17 @@ frontend/  Next.js App Router + Tailwind（5画面のPWA）
 5. Project Settings → API → JWT Settings から `Legacy JWT Secret` を取得 → バックエンドの環境変数へ（表示されていない場合は同画面でlegacy secretの発行/有効化が必要）
 6. （DBもSupabaseに載せる場合）Project Settings → Database → Connection string から接続文字列を取得 → バックエンドの `DATABASE_URL` へ
 
+### 通知用VAPIDキーの準備（Web Pushに必須、外部アカウント不要）
+
+Supabaseとは異なり、こちらはローカルで鍵ペアを生成するだけで外部サービスへの登録は不要：
+
+```bash
+cd backend && source .venv/bin/activate
+python scripts/generate_vapid_keys.py
+```
+
+出力された `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` を `.env` に貼る。`VAPID_SUBJECT` には連絡用の `mailto:` アドレスを設定する。
+
 ### バックエンド
 
 ```bash
@@ -46,12 +58,12 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# .env を編集し、上記で取得した SUPABASE_JWT_SECRET を設定する
-# （DATABASE_URL は未設定ならSQLiteのまま。Postgresに載せるなら上記5の接続文字列に差し替え）
+# .env を編集し、SUPABASE_JWT_SECRET と VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY を設定する
+# （DATABASE_URL は未設定ならSQLiteのまま。Postgresに載せるなら上記6の接続文字列に差し替え）
 uvicorn app.main:app --reload --port 8000
 ```
 
-初回起動時にテーブルが自動作成される。テストは `pytest`（貼り付け登録の抽出精度テスト `tests/test_extraction.py`、JWT検証のテスト `tests/test_auth.py` を含む、23件パス確認済み）。テストはSupabaseなしでも通る（`get_current_user` をテスト用ユーザーにオーバーライドしている）。
+初回起動時にテーブルが自動作成される。テストは `pytest`（貼り付け登録の抽出精度テスト `tests/test_extraction.py`、JWT検証のテスト `tests/test_auth.py`、リマインド送信ロジックのテスト `tests/test_notifications.py` を含む、30件パス確認済み）。テストはSupabase/VAPIDなしでも通る（`get_current_user` をテスト用ユーザーにオーバーライドし、`pywebpush.webpush` 自体はモックしている）。
 
 ### フロントエンド
 

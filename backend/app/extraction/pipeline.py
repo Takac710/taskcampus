@@ -5,6 +5,7 @@ rule-based ja-timex/RapidFuzz/dictionary layers below, composed here.
 from datetime import datetime
 
 from ..schemas import ExtractedFields
+from ..time_utils import now_jst
 from .course_matcher import match_course
 from .time_parser import resolve_due_datetime
 from .title_extractor import extract_title
@@ -16,7 +17,7 @@ def run_extraction(
     courses: list[tuple[str, str]],
     now: datetime | None = None,
 ) -> ExtractedFields:
-    now = now or datetime.now()
+    now = now or now_jst()
     first_sentence = text.split("。")[0] if text.strip() else text
 
     time_result = resolve_due_datetime(text, now=now)

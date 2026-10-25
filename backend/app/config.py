@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./taskcampus.db"
     supabase_jwt_secret: str = ""
     cors_origins: str = "http://localhost:3000"
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:admin@example.com"
+    notify_interval_minutes: int = 15
 
     @property
     def cors_origin_list(self) -> list[str]:

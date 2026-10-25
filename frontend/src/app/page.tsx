@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { TaskRow } from "@/components/TaskRow";
 import { api } from "@/lib/api";
+import { enablePushNotifications } from "@/lib/push";
 import type { Course, DeadlineBuckets, Task } from "@/lib/types";
 
 const SECTIONS: { key: keyof DeadlineBuckets; label: string; emphasize?: boolean }[] = [
@@ -20,6 +21,7 @@ function HomeContent() {
   const [buckets, setBuckets] = useState<DeadlineBuckets | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null);
 
   const load = async () => {
     try {
@@ -34,7 +36,13 @@ function HomeContent() {
 
   useEffect(() => {
     load();
+    if (typeof Notification !== "undefined") setNotifPermission(Notification.permission);
   }, []);
+
+  const handleEnableNotifications = async () => {
+    await enablePushNotifications();
+    if (typeof Notification !== "undefined") setNotifPermission(Notification.permission);
+  };
 
   const courseMap = new Map(courses.map((c) => [c.id, c]));
 
@@ -56,6 +64,18 @@ function HomeContent() {
       </header>
 
       {error && <p className="mx-4 rounded bg-red-50 p-3 text-sm text-red-600">{error}</p>}
+
+      {notifPermission === "default" && (
+        <div className="mx-4 flex items-center justify-between gap-3 rounded-lg bg-indigo-50 p-3 text-sm text-indigo-700">
+          <span>締切の通知を受け取りますか？</span>
+          <button
+            onClick={handleEnableNotifications}
+            className="shrink-0 rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white"
+          >
+            有効にする
+          </button>
+        </div>
+      )}
 
       {buckets &&
         SECTIONS.map(({ key, label, emphasize }) => {

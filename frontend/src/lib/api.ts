@@ -63,6 +63,13 @@ export const api = {
   deleteTask: (id: string) => request<void>(`/tasks/${id}`, { method: "DELETE" }),
   deadlineBuckets: () => request<DeadlineBuckets>("/tasks/views/deadline-buckets"),
 
+  vapidPublicKey: () => request<{ public_key: string }>("/push/vapid-public-key"),
+  subscribePush: (subscription: PushSubscriptionJSON) =>
+    request<{ status: string }>("/push/subscriptions", {
+      method: "POST",
+      body: JSON.stringify(subscription),
+    }),
+
   extract: (rawText: string) =>
     request<ExtractResponse>("/extract", { method: "POST", body: JSON.stringify({ raw_text: rawText }) }),
   confirmExtraction: (extractionLogId: string, fields: ExtractedFields) =>
