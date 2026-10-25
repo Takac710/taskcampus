@@ -1,21 +1,21 @@
 "use client";
 
 /**
- * Stub session for the MVP. The requirements doc calls for Google login via
- * Supabase Auth (F-01), which needs a Supabase project the developer sets up
- * outside this repo. Until then, "signing in" just flips a localStorage flag
- * so the rest of the app (which screens are reachable, nav visibility) can be
- * built and tried end-to-end; swap `signIn` for the real Supabase OAuth call
- * later without touching callers of `useAuth`.
+ * Real session via Supabase Auth (Google OAuth), per requirements F-01.
+ * `signIn` redirects through Google/Supabase; Supabase's client handles the
+ * callback (session is picked up from the URL automatically) and persists it,
+ * so no dedicated callback route is needed for this SPA-style app.
  */
 
+import type { Session } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-const STORAGE_KEY = "taskcampus_signed_in";
+import { supabase } from "./supabaseClient";
 
 interface AuthState {
   isSignedIn: boolean;
   isLoading: boolean;
+  session: Session | null;
   signIn: () => void;
   signOut: () => void;
 }
@@ -23,39 +23,38 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      setIsSignedIn(window.localStorage.getItem(STORAGE_KEY) === "1");
-    } catch {
-      // localStorage unavailable (e.g. private mode) -- stay signed out
-    } finally {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
       setIsLoading(false);
-    }
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setIsLoading(false);
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   const signIn = () => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      // ignore
-    }
-    setIsSignedIn(true);
+    supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
   };
 
   const signOut = () => {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-    setIsSignedIn(false);
+    supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ isSignedIn, isLoading, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ isSignedIn: session !== null, isLoading, session, signIn, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

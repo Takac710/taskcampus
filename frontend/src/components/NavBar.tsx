@@ -13,7 +13,7 @@ const LINKS = [
 
 export function NavBar() {
   const pathname = usePathname();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, signOut } = useAuth();
 
   if (!isSignedIn || pathname === "/login") return null;
 
@@ -33,6 +33,12 @@ export function NavBar() {
           </Link>
         );
       })}
+      <button
+        onClick={signOut}
+        className="flex-1 py-3 text-center text-sm font-medium text-neutral-500"
+      >
+        ログアウト
+      </button>
     </nav>
   );
 }

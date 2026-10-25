@@ -1,14 +1,14 @@
 """Auth dependency.
 
-MVP note: real auth is delegated to Supabase (Google OAuth) per the requirements
-doc. Wiring that up needs a Supabase project the user creates outside this repo.
-Until then, every request resolves to a single dev user so the rest of the app
-(CRUD, extraction) can be built and tested end-to-end. Swap `get_current_user`'s
-body for real Supabase JWT verification when credentials exist -- callers
-elsewhere never need to change.
+Verifies the Supabase Auth JWT sent by the frontend as `Authorization: Bearer
+<token>` and resolves (or lazily creates) the corresponding local User row.
+Supabase signs these tokens with the project's JWT secret (Project Settings >
+API > JWT Settings > "Legacy JWT Secret" -- HS256) using the standard
+`sub` (Supabase user id) and `aud: "authenticated"` claims.
 """
 
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException, status
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -17,11 +17,45 @@ from .models import User
 
 settings = get_settings()
 
+ALGORITHM = "HS256"
+AUDIENCE = "authenticated"
 
-def get_current_user(db: Session = Depends(get_db)) -> User:
-    user = db.query(User).filter(User.google_sub == settings.dev_user_google_sub).first()
+
+def _decode_token(token: str) -> dict:
+    try:
+        return jwt.decode(
+            token,
+            settings.supabase_jwt_secret,
+            algorithms=[ALGORITHM],
+            audience=AUDIENCE,
+        )
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired token"
+        ) from exc
+
+
+def get_current_user(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token"
+        )
+
+    payload = _decode_token(authorization.split(" ", 1)[1])
+    sub = payload.get("sub")
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="token missing sub claim"
+        )
+
+    user = db.query(User).filter(User.google_sub == sub).first()
     if user is None:
-        user = User(google_sub=settings.dev_user_google_sub, name="開発ユーザー")
+        metadata = payload.get("user_metadata") or {}
+        name = metadata.get("full_name") or metadata.get("name") or payload.get("email") or "ユーザー"
+        user = User(google_sub=sub, name=name)
         db.add(user)
         db.commit()
         db.refresh(user)

@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "sqlite:///./taskcampus.db"
-    dev_user_google_sub: str = "dev-user-local"
     supabase_jwt_secret: str = ""
     cors_origins: str = "http://localhost:3000"
 

@@ -15,15 +15,29 @@ frontend/  Next.js App Router + Tailwind（5画面のPWA）
 - 締切ビュー：期限切れ／今日／今週／それ以降（M4, F-04）
 - 貼り付け登録＋確認画面（M5, F-03）：ja-timexで日時表現を解決し、RapidFuzzで科目を曖昧マッチ、キーワード辞書で種類分類
 - 5画面：ログイン／ホーム／貼り付け登録・確認／タスク編集／科目管理
+- **Google OAuth（Supabase Auth）（M1, F-01)**：フロントは`@supabase/supabase-js`でGoogle OAuthを実行し、取得したアクセストークンをAPIリクエストの`Authorization: Bearer`ヘッダーに付与。バックエンドは`backend/app/deps.py`でSupabaseのJWT（HS256, legacy JWT secret）を検証し、`sub`クレームでユーザーを解決・自動作成する。Supabaseプロジェクトを作成して環境変数を設定するまでは、どのAPIリクエストも401になる（ダミーログインへのフォールバックはない）
 
 ## まだ実装していない範囲（要件どおり後回し）
 
-- **Google OAuth（Supabase Auth）**：`backend/app/deps.py` は常に固定の開発用ユーザーを返すダミー実装。`frontend/src/lib/auth.tsx` も localStorage フラグだけの疑似ログイン。Supabaseプロジェクトを作成し、両方を差し替える必要がある
-- **本番DB（Supabase Postgres）**：現状はSQLite（`backend/taskcampus.db`）。`DATABASE_URL` を差し替えれば動くはず（未検証）
+- **Supabaseプロジェクトの作成自体**：コードは実装済みだが、実際のSupabaseプロジェクト作成・Google OAuthクライアントの設定・環境変数への値の投入はこのリポジトリの外で行う必要がある（下記セットアップ参照）
+- **本番DB（Supabase Postgres）への切り替え**：`DATABASE_URL`をSupabaseの接続文字列に差し替えれば動く想定（`psycopg2-binary`導入済みだが実DBでの動作は未検証）。ローカル開発は引き続きSQLiteがデフォルト
 - **リマインド通知（M6, F-05）**：Web Push / pg_cron 部分は未着手
 - **デプロイ（Vercel / Render）**：未着手
 
 ## セットアップ
+
+### Supabaseプロジェクトの準備（Google OAuthに必須）
+
+ログインが実際に動くには、Supabaseプロジェクトを1つ作成し、以下を取得する必要がある：
+
+1. [supabase.com](https://supabase.com) でプロジェクトを作成
+2. Authentication → Sign In / Providers → Google を有効化
+   - Google Cloud Console で OAuth クライアントID を作成し、承認済みリダイレクトURIに `https://<project-ref>.supabase.co/auth/v1/callback` を設定
+   - 発行されたクライアントID／シークレットをSupabaseのGoogleプロバイダ設定に貼る
+3. Authentication → URL Configuration → Redirect URLs に `http://localhost:3000` を追加（本番公開時は本番URLも追加）
+4. Project Settings → API から `Project URL` と `anon public` キーを取得 → フロントの環境変数へ
+5. Project Settings → API → JWT Settings から `Legacy JWT Secret` を取得 → バックエンドの環境変数へ（表示されていない場合は同画面でlegacy secretの発行/有効化が必要）
+6. （DBもSupabaseに載せる場合）Project Settings → Database → Connection string から接続文字列を取得 → バックエンドの `DATABASE_URL` へ
 
 ### バックエンド
 
@@ -32,10 +46,12 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+# .env を編集し、上記で取得した SUPABASE_JWT_SECRET を設定する
+# （DATABASE_URL は未設定ならSQLiteのまま。Postgresに載せるなら上記5の接続文字列に差し替え）
 uvicorn app.main:app --reload --port 8000
 ```
 
-初回起動時にSQLiteのテーブルが自動作成される。テストは `pytest`（貼り付け登録の抽出精度テスト `tests/test_extraction.py` を含む、20件パス確認済み）。
+初回起動時にテーブルが自動作成される。テストは `pytest`（貼り付け登録の抽出精度テスト `tests/test_extraction.py`、JWT検証のテスト `tests/test_auth.py` を含む、23件パス確認済み）。テストはSupabaseなしでも通る（`get_current_user` をテスト用ユーザーにオーバーライドしている）。
 
 ### フロントエンド
 
@@ -43,10 +59,11 @@ uvicorn app.main:app --reload --port 8000
 cd frontend
 npm install
 cp .env.local.example .env.local
+# .env.local を編集し、NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY を設定する
 npm run dev
 ```
 
-`http://localhost:3000` を開き、ダミーのGoogleログインボタンでログイン後、科目を1つ登録してから「貼り付け登録」を試すのがおすすめ（科目が登録されていないと科目の自動マッチは働かない）。
+`http://localhost:3000` を開き、「Googleでログイン」ボタンでログイン後、科目を1つ登録してから「貼り付け登録」を試すのがおすすめ（科目が登録されていないと科目の自動マッチは働かない）。Supabaseの環境変数が未設定のままだと、ログインボタンを押しても失敗する（コンソールに警告が出る）。
 
 ## 貼り付け登録の抽出ロジックについて
 
